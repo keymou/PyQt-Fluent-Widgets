@@ -18,7 +18,7 @@ from ...common.style_sheet import FluentStyleSheet
 class ComboItem:
     """ Combo box item """
 
-    def __init__(self, text: str, icon: Union[str, QIcon, FluentIconBase] = None, userData=None):
+    def __init__(self, text: str, icon: Union[str, QIcon, FluentIconBase] = None, userData=None, isEnabled=True):
         """ add item
 
         Parameters
@@ -31,10 +31,14 @@ class ComboItem:
 
         userData: Any
             user data
+
+        isEnabled: bool
+            whether to enable the item
         """
         self.text = text
         self.userData = userData
         self.icon = icon
+        self.isEnabled = isEnabled
 
     @property
     def icon(self):
@@ -56,6 +60,8 @@ class ComboBoxBase(QObject):
 
     currentIndexChanged = pyqtSignal(int)
     currentTextChanged = pyqtSignal(str)
+    activated = pyqtSignal(int)
+    textActivated = pyqtSignal(str)
 
     def __init__(self, parent=None, **kwargs):
         super().__init__(parent=parent)
@@ -236,6 +242,11 @@ class ComboBoxBase(QObject):
         if 0 <= index < len(self.items):
             self.items[index].icon = icon
 
+    def setItemEnabled(self, index: int, isEnabled: bool):
+        """ Sets the enabled status of the item on the given index """
+        if 0 <= index < len(self.items):
+            self.items[index].isEnabled = isEnabled
+
     def findData(self, data):
         """ Returns the index of the item containing the given data, otherwise returns -1 """
         for i, item in enumerate(self.items):
@@ -293,7 +304,12 @@ class ComboBoxBase(QObject):
         if not self.dropMenu:
             return
 
-        self.dropMenu.close()
+        # drop menu could be deleted before this method
+        try:
+            self.dropMenu.close()
+        except:
+            pass
+
         self.dropMenu = None
 
     def _onDropMenuClosed(self):
@@ -313,14 +329,16 @@ class ComboBoxBase(QObject):
 
         menu = self._createComboMenu()
         for i, item in enumerate(self.items):
-            menu.addAction(
-                QAction(item.icon, item.text, triggered=lambda c, x=i: self._onItemClicked(x)))
+            action = QAction(item.icon, item.text, triggered=lambda c, x=i: self._onItemClicked(x))
+            action.setEnabled(item.isEnabled)
+            menu.addAction(action)
 
         if menu.view.width() < self.width():
             menu.view.setMinimumWidth(self.width())
             menu.adjustSize()
 
         menu.setMaxVisibleItems(self.maxVisibleItems())
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         menu.closedSignal.connect(self._onDropMenuClosed)
         self.dropMenu = menu
 
@@ -350,10 +368,11 @@ class ComboBoxBase(QObject):
             self._showComboMenu()
 
     def _onItemClicked(self, index):
-        if index == self.currentIndex():
-            return
+        if index != self.currentIndex():
+            self.setCurrentIndex(index)
 
-        self.setCurrentIndex(index)
+        self.activated.emit(index)
+        self.textActivated.emit(self.currentText())
 
 
 class ComboBox(QPushButton, ComboBoxBase):
@@ -361,6 +380,8 @@ class ComboBox(QPushButton, ComboBoxBase):
 
     currentIndexChanged = pyqtSignal(int)
     currentTextChanged = pyqtSignal(str)
+    activated = pyqtSignal(int)
+    textActivated = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -414,6 +435,8 @@ class EditableComboBox(LineEdit, ComboBoxBase):
 
     currentIndexChanged = pyqtSignal(int)
     currentTextChanged = pyqtSignal(str)
+    activated = pyqtSignal(int)
+    textActivated = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)

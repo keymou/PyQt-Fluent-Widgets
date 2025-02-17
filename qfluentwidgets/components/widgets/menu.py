@@ -18,6 +18,7 @@ from ...common.screen import getCurrentScreenGeometry
 from ...common.font import getFont
 from ...common.config import isDarkTheme
 from .scroll_bar import SmoothScrollDelegate
+from .tool_tip import ItemViewToolTipDelegate, ItemViewToolTipType
 
 
 class CustomMenuStyle(QProxyStyle):
@@ -107,6 +108,10 @@ class SubMenuItemWidget(QWidget):
 class MenuItemDelegate(QStyledItemDelegate):
     """ Menu item delegate """
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.tooltipDelegate = None
+
     def _isSeparator(self, index: QModelIndex):
         return index.model().data(index, Qt.DecorationRole) == "seperator"
 
@@ -125,6 +130,12 @@ class MenuItemDelegate(QStyledItemDelegate):
         painter.drawLine(0, rect.y() + 4, rect.width() + 12, rect.y() + 4)
 
         painter.restore()
+
+    def helpEvent(self, event, view, option, index):
+        if not self.tooltipDelegate:
+            self.tooltipDelegate = ItemViewToolTipDelegate(view, 100, ItemViewToolTipType.LIST)
+
+        return self.tooltipDelegate.helpEvent(event, view, option, index)
 
 
 class ShortcutMenuItemDelegate(MenuItemDelegate):
@@ -208,7 +219,9 @@ class MenuActionListWidget(QListWidget):
 
         # adjust the height of viewport
         w, h = MenuAnimationManager.make(self, aniType).availableViewSize(pos)
-        self.viewport().adjustSize()
+
+        # fixes https://github.com/zhiyiYo/PyQt-Fluent-Widgets/issues/844
+        # self.viewport().adjustSize()
 
         # adjust the height of list widget
         m = self.viewportMargins()
@@ -264,7 +277,7 @@ class RoundMenu(QMenu):
 
     def __init__(self, title="", parent=None):
         super().__init__(parent=parent)
-        self._title = title
+        self.setTitle(title)
         self._icon = QIcon()
         self._actions = []  # type: List[QAction]
         self._subMenus = []
@@ -345,8 +358,11 @@ class RoundMenu(QMenu):
 
     def clear(self):
         """ clear all actions """
-        for i in range(len(self._actions)-1, -1, -1):
-            self.removeAction(self._actions[i])
+        while self._actions:
+            self.removeAction(self._actions[-1])
+
+        while self._subMenus:
+            self.removeMenu(self._subMenus[-1])
 
     def setIcon(self, icon: Union[QIcon, FluentIconBase]):
         """ set the icon of menu """
@@ -354,6 +370,10 @@ class RoundMenu(QMenu):
             icon = Icon(icon)
 
         self._icon = icon
+
+    def setTitle(self, title: str):
+        self._title = title
+        super().setTitle(title)
 
     def addAction(self, action: Union[QAction, Action]):
         """ add action to menu
@@ -416,6 +436,8 @@ class RoundMenu(QMenu):
         # disable item if the action is not enabled
         if not action.isEnabled():
             item.setFlags(Qt.NoItemFlags)
+        if action.text() != action.toolTip():
+            item.setToolTip(action.toolTip())
 
         item.setData(Qt.UserRole, action)
         action.setProperty('item', item)
@@ -511,14 +533,17 @@ class RoundMenu(QMenu):
             return
 
         # remove item
-        self.view.takeItem(self.view.row(item))
-        item.setData(Qt.UserRole, None)
+        self._removeItem(item)
         super().removeAction(action)
 
-        # delete widget
-        widget = self.view.itemWidget(item)
-        if widget:
-            widget.deleteLater()
+    def removeMenu(self, menu):
+        """ remove submenu """
+        if menu not in self._subMenus:
+            return
+
+        item = menu.menuItem
+        self._subMenus.remove(menu)
+        self._removeItem(item)
 
     def setDefaultAction(self, action: Union[QAction, Action]):
         """ set the default action """
@@ -578,6 +603,15 @@ class RoundMenu(QMenu):
         w.resize(item.sizeHint())
 
         return item, w
+
+    def _removeItem(self, item):
+        self.view.takeItem(self.view.row(item))
+        item.setData(Qt.UserRole, None)
+
+        # delete widget
+        widget = self.view.itemWidget(item)
+        if widget:
+            widget.deleteLater()
 
     def _showSubMenu(self, item):
         """ show sub menu """
@@ -694,6 +728,9 @@ class RoundMenu(QMenu):
         action = self.sender()  # type: QAction
         item = action.property('item')  # type: QListWidgetItem
         item.setIcon(self._createItemIcon(action))
+
+        if action.text() != action.toolTip():
+            item.setToolTip(action.toolTip())
 
         self._adjustItemText(item, action)
 

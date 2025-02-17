@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QFrame, QApplication, QHBoxLay
 from .navigation_widget import (NavigationTreeWidgetBase, NavigationToolButton, NavigationWidget, NavigationSeparator,
                                 NavigationTreeWidget, NavigationFlyoutMenu)
 from ..widgets.acrylic_label import AcrylicBrush
-from ..widgets.scroll_area import SingleDirectionScrollArea
+from ..widgets.scroll_area import ScrollArea
 from ..widgets.tool_tip import ToolTipFilter
 from ..widgets.flyout import Flyout, FlyoutAnimationType, FlyoutViewBase, SlideRightFlyoutAnimationManager
 from ..material.acrylic_flyout import AcrylicFlyout, AcrylicFlyoutViewBase
@@ -71,7 +71,7 @@ class NavigationPanel(QFrame):
 
         self.acrylicBrush = AcrylicBrush(self, 30)
 
-        self.scrollArea = SingleDirectionScrollArea(self)
+        self.scrollArea = ScrollArea(self)
         self.scrollWidget = QWidget()
 
         self.menuButton = NavigationToolButton(FIF.MENU, self)
@@ -107,6 +107,7 @@ class NavigationPanel(QFrame):
 
         self.scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scrollArea.horizontalScrollBar().setEnabled(False)
         self.scrollArea.setWidget(self.scrollWidget)
         self.scrollArea.setWidgetResizable(True)
 
@@ -142,7 +143,7 @@ class NavigationPanel(QFrame):
         self.scrollLayout.setSpacing(4)
 
         self.vBoxLayout.addLayout(self.topLayout, 0)
-        self.vBoxLayout.addWidget(self.scrollArea, 1, Qt.AlignTop)
+        self.vBoxLayout.addWidget(self.scrollArea, 1)
         self.vBoxLayout.addLayout(self.bottomLayout, 0)
 
         self.vBoxLayout.setAlignment(Qt.AlignTop)
@@ -567,15 +568,6 @@ class NavigationPanel(QFrame):
 
     def isCollapsed(self):
         return self.displayMode == NavigationDisplayMode.COMPACT
-
-    def resizeEvent(self, e: QResizeEvent):
-        if e.oldSize().height() == self.height():
-            return
-
-        th = self.topLayout.minimumSize().height()
-        bh = self.bottomLayout.minimumSize().height()
-        h = self.height()-th-bh-20
-        self.scrollArea.setFixedHeight(max(h, 36))
 
     def eventFilter(self, obj, e: QEvent):
         if obj is not self.window() or not self._isCollapsible:
